@@ -61,12 +61,14 @@ async function run() {
       if (!token) {
           return res.status(401).send({ message: 'Unauthorized access' });
       }
-  
-      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+ 
+      jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+    
           if (err) {
               return res.status(403).send({ message: 'Forbidden access' });
           }
-          req.email = decoded.email; // Here, setting the email to req object
+          req.email = decoded.data; 
+         
           next();
       });
   };
@@ -85,7 +87,8 @@ async function run() {
 
 
     const verifyAdmin = async (req, res, next) => {
-      const tokenEmail = req.decoded.data;
+      const tokenEmail = req.email;
+      // console.log(tokenEmail);
       const query = { email: tokenEmail }
       const result = await userCollection.findOne(query)
       const isAdmin = result?.role === 'admin'
@@ -182,7 +185,7 @@ async function run() {
 
     })
 
-    app.get('/allUser/admin', verifyToken, verifyAdmin, async (req, res) => {
+    app.get('/allUser', verifyToken,verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
       res.send(result)
 
