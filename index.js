@@ -301,13 +301,30 @@ app.patch('/agent/cashIn', verifyToken, verifyAgent, async (req, res) => {
 });
 
 
-// agent TransactionHistory
-app.get('/agent/transactionHistory/:mobile', async (req, res) => {
+// agent  TransactionHistory
+app.get('/agent/transactionHistory/:mobile',  async (req, res) => {
   const phone = req.params.mobile;
 
   try {
       const transactions = await historyCollection
           .find({ agentNumber : phone }) 
+          .sort({ date: -1 })     
+          .limit(20)              
+          .toArray();
+
+      res.send({ transactions });
+  }
+   catch (error) {
+      res.status(500).send({ error: 'An error occurred while fetching transaction history.' });
+  }
+});
+// user  TransactionHistory
+app.get('/user/transactionHistory/:mobile',  async (req, res) => {
+  const phone = req.params.mobile;
+
+  try {
+      const transactions = await historyCollection
+          .find({ userNumber : phone }) 
           .sort({ date: -1 })     
           .limit(20)              
           .toArray();
