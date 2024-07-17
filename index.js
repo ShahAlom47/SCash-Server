@@ -233,7 +233,7 @@ app.get('/addCashInData/:mobile', verifyToken, verifyAgent, async (req, res) => 
 app.patch('/agent/cashIn', verifyToken, async (req, res) => {
   try {
       const cashInDatas = req.body;
-      const dataId= cashInDatas.cashInDataId
+      const dataId = cashInDatas.cashInDataId;
       const agentPassword = cashInDatas.agentPassword;
       const agentMobile = cashInDatas.agentNumber;
       const userMobile = cashInDatas.userNumber;
@@ -242,52 +242,64 @@ app.patch('/agent/cashIn', verifyToken, async (req, res) => {
       const agent = await userCollection.findOne({ mobile: agentMobile });
 
       if (!agent) {
-          return res.status(400).send({ message: 'Invalid Agent' });
+          return res.send({ status: 'error', message: 'Invalid Agent' });
       }
 
       const isMatch = await bcrypt.compare(agentPassword, agent.password);
 
       if (!isMatch) {
-          return res.send({ message: 'Invalid Pin' });
+          return res.send({ status: 'error', message: 'Invalid Pin' });
       }
 
       const user = await userCollection.findOne({ mobile: userMobile });
       if (!user) {
-          return res.send({ message: 'Invalid User Number' });
+          return res.send({ status: 'error', message: 'Invalid User Number' });
       }
 
+      const agentBalance = parseFloat(agent.balance);
       const userBalance = parseFloat(user.balance);
-      const newBalance = userBalance + amount;
 
-      const result = await userCollection.updateOne(
+      
+      if (agentBalance < amount) {
+          return res.send({ status: 'error', message: 'Agent does not have enough balance' });
+      }
+
+      const newAgentBalance = agentBalance - amount;
+      const newUserBalance = userBalance + amount;
+
+      
+      const updateUserResult = await userCollection.updateOne(
           { mobile: userMobile },
-          { $set: { balance: newBalance } }
+          { $set: { balance: newUserBalance } }
       );
 
-      if (result.modifiedCount > 0) {
-          const updateStatus =await cashInCollection.updateOne(
-            {
-              _id:new ObjectId(dataId)
-            },
-            {
-               $set: { status:'completed' } 
-            }
-          )
+      const updateAgentResult = await userCollection.updateOne(
+          { mobile: agentMobile },
+          { $set: { balance: newAgentBalance } }
+      );
+
+      if (updateUserResult.modifiedCount > 0 && updateAgentResult.modifiedCount > 0) {
+          
+          const updateStatus = await cashInCollection.updateOne(
+              { _id: new ObjectId(dataId) },
+              { $set: { status: 'completed' } }
+          );
 
           if (updateStatus.modifiedCount > 0) {
               const historyResult = await historyCollection.insertOne(cashInDatas);
 
-              return res.send({ message: 'Balance updated successfully', newBalance });
+              return res.send({ status: 'success', message: 'Balance updated successfully', newUserBalance, newAgentBalance });
           } else {
-              return res.send({ message: 'Failed to update cash-in status' });
+              return res.send({ status: 'error', message: 'Failed to update cash-in status' });
           }
       } else {
-          return res.send({ message: 'Failed to update balance' });
+          return res.send({ status: 'error', message: 'Failed to update balances' });
       }
   } catch (error) {
-      return res.send({ message: 'Internal Server Error' });
+      return res.send({ status: 'error', message: 'Internal Server Error' });
   }
 });
+
 
 
 
