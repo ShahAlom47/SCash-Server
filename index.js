@@ -48,6 +48,7 @@ async function run() {
 
 
     const userCollection = client.db("JobTask_DB").collection('usersData')
+    const cashInCollection = client.db("JobTask_DB").collection('cashInData')
 
 
 
@@ -61,14 +62,15 @@ async function run() {
       if (!token) {
           return res.status(401).send({ message: 'Unauthorized access' });
       }
- 
+  
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
-    
           if (err) {
+              if (err.name === 'TokenExpiredError') {
+                  return res.status(401).send({ message: 'Token expired' });
+              }
               return res.status(403).send({ message: 'Forbidden access' });
           }
           req.email = decoded.data; 
-         
           next();
       });
   };
@@ -194,6 +196,16 @@ async function run() {
 
     })
 
+    // cash in Routes 
+    app.post('/addCashInData', async (req, res) => {
+      const cashInData = req.body;
+    
+      const result = await cashInCollection.insertOne(cashInData);
+     
+      res.send(result);
+    });
+    
+
     
 
     // change user role by admin 
@@ -240,95 +252,6 @@ app.delete('/user/admin/delete/:id', verifyToken,verifyAdmin, async (req, res) =
 
 
 
-    // ---------------------
-    // PAYMENT History start
-    // ---------------------
-    app.post('/paymentHistory', async (req, res) => {
-      const paymentData = req.body
-      const offerCardId = paymentData.offerCardId;
-      const transactionId = paymentData.transactionId;
-      console.log(offerCardId, transactionId);
-      const session = client.startSession();
-      session.startTransaction();
-
-      // const result= await paymentDataCollection.insertOne(paymentData)
-
-      const statusUpdate = await offerDataCollection.updateOne(
-        { _id: new ObjectId(offerCardId) },
-        {
-          $set: { verification_status: 'bought' },
-          $push: { transactions: transactionId }
-        },
-        { session }
-      );
-
-      await session.commitTransaction();
-      session.endSession();
-
-      res.send(statusUpdate)
-
-
-
-
-
-    })
-
-
-    // ---------------------
-    // PAYMENT  History end 
-    // ---------------------
-    // ---------------------
-    // PAYMENT 
-    // ---------------------
-
-
-    app.post("/create-payment-intent", async (req, res) => {
-      try {
-        const { price } = req.body;
-        const amount = parseInt(100 * price);
-        const MAX_AMOUNT = 99999999; // in the smallest currency unit, for AED this is 999,999.99 AED
-
-        if (amount > MAX_AMOUNT) {
-          return res.status(400).send({ error: 'Amount must be no more than 999,999 AED' });
-        }
-
-        // Create a PaymentIntent with the order amount and currency
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amount,
-          currency: "aed",
-          payment_method_types: ["card"],
-        });
-
-        res.send({
-          clientSecret: paymentIntent.client_secret,
-        });
-      } catch (error) {
-        console.error('Error creating payment intent:', error);
-        res.status(500).send({ error: 'Failed to create payment intent' });
-      }
-    });
-
-    // ---------------------
-    // PAYMENT 
-    // ---------------------
-
-
-    app.post('/create-checkout-session', async (req, res) => {
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-            price: '{{PRICE_ID}}',
-            quantity: 1,
-          },
-        ],
-        mode: 'payment',
-        success_url: `${YOUR_DOMAIN}?success=true`,
-        cancel_url: `${YOUR_DOMAIN}?canceled=true`,
-      });
-
-      res.redirect(303, session.url);
-    });
 
 
 
