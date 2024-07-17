@@ -230,6 +230,8 @@ app.get('/addCashInData/:mobile', verifyToken, verifyAgent, async (req, res) => 
   res.send(result);
 });
 
+
+
 app.patch('/agent/cashIn', verifyToken, verifyAgent, async (req, res) => {
   try {
       const cashInDatas = req.body;
@@ -336,7 +338,74 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
   }
 });
 
+  // user Cash Out   start
+  app.post('/user/cashOut', verifyToken, async (req, res) => {
+    try {
+        
+        const cashInDatas = req.body;
+        const dataId = cashInDatas.cashInDataId;
+        const password = cashInDatas.password;
+        const agentMobile = cashInDatas.agentNumber;
+        const userMobile = cashInDatas.userNumber;
+        const amount = parseFloat(cashInDatas.amount);
+  
+        const agent = await userCollection.findOne({ mobile: agentMobile });
+  
+        if (!agent) {
+            return res.send({ status: 'error', message: 'Invalid Agent Number' });
+        }
+  
+       
+  
+        const user = await userCollection.findOne({ mobile: userMobile });
+        if (!user) {
+            return res.send({ status: 'error', message: 'Invalid User' });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+  
+        if (!isMatch) {
+            return res.send({ status: 'error', message: 'Invalid Pin' });
+        }
+        const agentBalance = parseFloat(agent.balance);
+        const userBalance = parseFloat(user.balance);
+  
+        
+        if (userBalance < amount) {
+            return res.send({ status: 'error', message: ' You don`t have enough balance' });
+        }
+  
+        const newAgentBalance = agentBalance + amount;
+        const newUserBalance = userBalance - amount;
+  
+        
+        const updateUserResult = await userCollection.updateOne(
+            { mobile: userMobile },
+            { $set: { balance: newUserBalance } }
+        );
+  
+        const updateAgentResult = await userCollection.updateOne(
+            { mobile: agentMobile },
+            { $set: { balance: newAgentBalance } }
+        );
+  
+        if (updateUserResult.modifiedCount > 0 && updateAgentResult.modifiedCount > 0) {
+            
+                const historyResult = await historyCollection.insertOne(cashInDatas);
+  
+                return res.send({ status: 'success', message: 'CashOut  successfully Completed', newUserBalance, newAgentBalance });
+            
+        } else {
+            return res.send({ status: 'error', message: 'Failed to update balances' });
+        }
+    } catch (error) {
+        return res.send({ status: 'error', message: 'Internal Server Error' });
+    }
+  });
+  
+  
 
+
+  // user Cash Out   end 
 
 
 
