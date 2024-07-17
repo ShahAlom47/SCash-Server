@@ -49,34 +49,35 @@ async function run() {
 
     const userCollection = client.db("JobTask_DB").collection('usersData')
     const cashInCollection = client.db("JobTask_DB").collection('cashInData')
+    const historyCollection = client.db("JobTask_DB").collection('historyData')
 
 
 
     // middleware 
     const verifyToken = (req, res, next) => {
       if (!req.headers.authorization) {
-          return res.status(401).send({ message: 'Unauthorized access' });
+        return res.status(401).send({ message: 'Unauthorized access' });
       }
-  
+
       const token = req.headers.authorization.split(' ')[1];
       if (!token) {
-          return res.status(401).send({ message: 'Unauthorized access' });
+        return res.status(401).send({ message: 'Unauthorized access' });
       }
-  
+
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
-          if (err) {
-              if (err.name === 'TokenExpiredError') {
-                  return res.status(401).send({ message: 'Token expired' });
-              }
-              return res.status(403).send({ message: 'Forbidden access' });
+        if (err) {
+          if (err.name === 'TokenExpiredError') {
+            return res.status(401).send({ message: 'Token expired' });
           }
-          req.email = decoded.data; 
-          next();
+          return res.status(403).send({ message: 'Forbidden access' });
+        }
+        req.email = decoded.data;
+        next();
       });
-  };
+    };
 
     const verifyAgent = async (req, res, next) => {
-      const tokenEmail = req.decoded.data;
+      const tokenEmail = req.email;
       const query = { email: tokenEmail }
       const result = await userCollection.findOne(query)
       const isAgent = result?.role === 'agent'
@@ -117,58 +118,58 @@ async function run() {
     app.post('/is-login', async (req, res) => {
       try {
 
-        const token=req.body.token
+        const token = req.body.token
         var decoded = jwt.verify(token, process.env.ACCESS_TOKEN);
-        const email=decoded.data
+        const email = decoded.data
 
-          const existingUser = await userCollection.findOne({ email: email });
-          if (existingUser) {
-              res.send({ message: 'User is logged in', user: existingUser });
-          } else {
-              res.sendStatus(404); // User not found
-          }
+        const existingUser = await userCollection.findOne({ email: email });
+        if (existingUser) {
+          res.send({ message: 'User is logged in', user: existingUser });
+        } else {
+          res.sendStatus(404);
+        }
       } catch (error) {
-          console.error('Error fetching user:', error);
-          res.sendStatus(500); // Internal server error
+        console.error('Error fetching user:', error);
+        res.sendStatus(500);
       }
-  });
+    });
 
 
-  app.post('/signIn', async (req, res) => {
- 
-    const { email, password } = req.body;
-    // console.log();
-    try {
-      const user = await userCollection.findOne({ email:email });
+    app.post('/signIn', async (req, res) => {
 
-      if (!user) {
+      const { email, password } = req.body;
+      // console.log();
+      try {
+        const user = await userCollection.findOne({ email: email });
+
+        if (!user) {
           return res.status(400).send({ message: 'Invalid email ' });
-      }
+        }
 
-      const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(password, user.password);
 
-      if (!isMatch) {
+        if (!isMatch) {
           return res.status(400).send({ message: 'Invalid  password' });
-      }
-      res.send({ message: 'Login successful', user});
+        }
+        res.send({ message: 'Login successful', user });
 
-      console.log(email);
-     
-    } catch (error) {
+        console.log(email);
+
+      } catch (error) {
         console.error('Error fetching user:', error);
         res.sendStatus(500); // Internal server error
-    }
-});
+      }
+    });
 
-  
+
 
 
     // user Api start
-   
+
 
     app.post('/addUser', async (req, res) => {
       const userInfo = req.body;
-    
+
       const emailQuery = { email: userInfo.email };
       const mobileQuery = { mobile: userInfo.mobile };
 
@@ -176,78 +177,162 @@ async function run() {
       if (existingEmailUser) {
         return res.send({ message: 'User already exists with this email', insertedId: null });
       }
-    
+
       const existingMobileUser = await userCollection.findOne(mobileQuery);
       if (existingMobileUser) {
         return res.send({ message: 'User already exists with this mobile number', insertedId: null });
       }
-    
+
       const result = await userCollection.insertOne(userInfo);
       if (result.insertedId) {
         res.send({ message: 'Completed, Please Wait for Admin Confirmation', insertedId: result.insertedId });
       }
       res.send(result);
     });
-    
 
-    app.get('/allUser', verifyToken,verifyAdmin, async (req, res) => {
+
+    app.get('/allUser', verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
       res.send(result)
 
     })
 
     // cash in Routes 
-    app.post('/addCashInData', async (req, res) => {
-      const cashInData = req.body;
-    
-      const result = await cashInCollection.insertOne(cashInData);
-     
-      res.send(result);
-    });
-    
+    app.post('/addCashInData/:mobile', verifyToken, async (req, res) => {
+    const cashInData = req.body;
+    const mobile = req.params.mobile;
+    console.log(mobile);
 
-    
+    const query = { mobile: mobile, role: 'agent' };
 
-    // change user role by admin 
+    const agent = await userCollection.findOne(query); 
+    if (!agent) {
+        return res.send({ message: 'This is not an agent number' });
+    }
 
-    
-app.patch('/user/admin/role/:id', verifyToken, verifyAdmin, async (req, res) => {
-  const id = req.params.id;
-  const { role } = req.body;
-  console.log(id, role);
+    const result = await cashInCollection.insertOne(cashInData);
+    if(result.insertedId){
+     return res.send({message:'Request submitted, wait for agent confirmation',result});
+    }
+    res.send(result);
+});
 
-  const query = { _id: new ObjectId(id) };
-  const user = await userCollection.findOne(query);
+app.get('/addCashInData/:mobile', verifyToken, verifyAgent, async (req, res) => {
+  const mobile = req.params.mobile;
 
-  if (!user) {
-      return res.status(404).send({ message: 'User not found' });
-  }
-console.log(user);
-  let updateDoc = {
-      $set: { role: role }
+  const query = { 
+      agentNumber: mobile,
+      status: 'pending'
   };
 
+  const result = await cashInCollection.find(query).toArray();
 
-  if (role ==='user' && user. balance === 0) {
-      updateDoc.$set.balance = 40;
-  } else if (role === 'agent' && user.balance === 0) {
-      updateDoc.$set.balance= 10000;
-  }
-
-  const result = await userCollection.updateOne(query, updateDoc);
   res.send(result);
 });
 
+app.patch('/agent/cashIn', verifyToken, async (req, res) => {
+  try {
+      const cashInDatas = req.body;
+      const dataId= cashInDatas.cashInDataId
+      const agentPassword = cashInDatas.agentPassword;
+      const agentMobile = cashInDatas.agentNumber;
+      const userMobile = cashInDatas.userNumber;
+      const amount = parseFloat(cashInDatas.amount);
 
-// delete user 
+      const agent = await userCollection.findOne({ mobile: agentMobile });
 
-app.delete('/user/admin/delete/:id', verifyToken,verifyAdmin, async (req, res) => {
-  const id = req.params.id
+      if (!agent) {
+          return res.status(400).send({ message: 'Invalid Agent' });
+      }
+
+      const isMatch = await bcrypt.compare(agentPassword, agent.password);
+
+      if (!isMatch) {
+          return res.send({ message: 'Invalid Pin' });
+      }
+
+      const user = await userCollection.findOne({ mobile: userMobile });
+      if (!user) {
+          return res.send({ message: 'Invalid User Number' });
+      }
+
+      const userBalance = parseFloat(user.balance);
+      const newBalance = userBalance + amount;
+
+      const result = await userCollection.updateOne(
+          { mobile: userMobile },
+          { $set: { balance: newBalance } }
+      );
+
+      if (result.modifiedCount > 0) {
+          const updateStatus =await cashInCollection.updateOne(
+            {
+              _id:new ObjectId(dataId)
+            },
+            {
+               $set: { status:'completed' } 
+            }
+          )
+
+          if (updateStatus.modifiedCount > 0) {
+              const historyResult = await historyCollection.insertOne(cashInDatas);
+
+              return res.send({ message: 'Balance updated successfully', newBalance });
+          } else {
+              return res.send({ message: 'Failed to update cash-in status' });
+          }
+      } else {
+          return res.send({ message: 'Failed to update balance' });
+      }
+  } catch (error) {
+      return res.send({ message: 'Internal Server Error' });
+  }
+});
+
+
+
+
+
+    // change user role by admin 
+
+
+    app.patch('/user/admin/role/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const { role } = req.body;
+      console.log(id, role);
+
+      const query = { _id: new ObjectId(id) };
+      const user = await userCollection.findOne(query);
+
+      if (!user) {
+        return res.status(404).send({ message: 'User not found' });
+      }
+      console.log(user);
+      let updateDoc = {
+        $set: { role: role }
+      };
+
+
+      if (role === 'user' && user.balance === 0) {
+        updateDoc.$set.balance = 40;
+      } else if (role === 'agent' && user.balance === 0) {
+        updateDoc.$set.balance = 10000;
+      }
+
+      const result = await userCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
+
+
+    // delete user 
+
+    app.delete('/user/admin/delete/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id
       const query = { _id: new ObjectId(id) }
       const result = await userCollection.deleteOne(query);
       res.send(result);
 
-})
+    })
 
 
 
