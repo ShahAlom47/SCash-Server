@@ -113,9 +113,6 @@ async function run() {
     })
 
     app.post('/is-login', async (req, res) => {
-     
-     
-    
       try {
 
         const token=req.body.token
@@ -151,9 +148,6 @@ async function run() {
       if (!isMatch) {
           return res.status(400).send({ message: 'Invalid  password' });
       }
-
-    
-
       res.send({ message: 'Login successful', user});
 
       console.log(email);
@@ -171,19 +165,28 @@ async function run() {
    
 
     app.post('/addUser', async (req, res) => {
-      const userInfo = req.body
+      const userInfo = req.body;
+    
+      const emailQuery = { email: userInfo.email };
+      const mobileQuery = { mobile: userInfo.mobile };
 
-
-      const query = { email: userInfo.email }
-      const existingUser = await userCollection.findOne(query)
-      if (existingUser) {
-        return res.send({ message: 'user already exist', insertedId: null })
+      const existingEmailUser = await userCollection.findOne(emailQuery);
+      if (existingEmailUser) {
+        return res.send({ message: 'User already exists with this email', insertedId: null });
       }
-
-      const result = await userCollection.insertOne(userInfo)
-      res.send(result)
-
-    })
+    
+      const existingMobileUser = await userCollection.findOne(mobileQuery);
+      if (existingMobileUser) {
+        return res.send({ message: 'User already exists with this mobile number', insertedId: null });
+      }
+    
+      const result = await userCollection.insertOne(userInfo);
+      if (result.insertedId) {
+        res.send({ message: 'Completed, Please Wait for Admin Confirmation', insertedId: result.insertedId });
+      }
+      res.send(result);
+    });
+    
 
     app.get('/allUser', verifyToken,verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
@@ -191,32 +194,48 @@ async function run() {
 
     })
 
-    app.get('/user/role/:email', verifyToken, async (req, res) => {
-      const userEmail = req.params.email
-      const tokenEmail = req.decoded.data;
-      if (userEmail !== tokenEmail) {
-        return res.status(403).send({ message: 'forbidden user' })
-      }
-      const query = { email: userEmail }
-      const result = await userCollection.findOne(query)
-      const userRole = result && result.role ? result.role : 'user';
-      res.send({ userRole });
-    })
+    
 
     // change user role by admin 
 
-    app.patch('/user/admin/role/:id', verifyToken, verifyAdmin, async (req, res) => {
-      const id = req.params.id
-      const { role } = req.body
+    
+app.patch('/user/admin/role/:id', verifyToken, verifyAdmin, async (req, res) => {
+  const id = req.params.id;
+  const { role } = req.body;
+  console.log(id, role);
+
+  const query = { _id: new ObjectId(id) };
+  const user = await userCollection.findOne(query);
+
+  if (!user) {
+      return res.status(404).send({ message: 'User not found' });
+  }
+console.log(user);
+  let updateDoc = {
+      $set: { role: role }
+  };
+
+
+  if (role ==='user' && user. balance === 0) {
+      updateDoc.$set.balance = 40;
+  } else if (role === 'agent' && user.balance === 0) {
+      updateDoc.$set.balance= 10000;
+  }
+
+  const result = await userCollection.updateOne(query, updateDoc);
+  res.send(result);
+});
+
+
+// delete user 
+
+app.delete('/user/admin/delete/:id', verifyToken,verifyAdmin, async (req, res) => {
+  const id = req.params.id
       const query = { _id: new ObjectId(id) }
-      updateDoc = {
-        $set: { role: role }
-      }
-      const result = await userCollection.updateOne(query, updateDoc);
+      const result = await userCollection.deleteOne(query);
       res.send(result);
-    })
 
-
+})
 
 
 
