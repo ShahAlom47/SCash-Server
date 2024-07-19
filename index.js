@@ -91,7 +91,6 @@ async function run() {
 
     const verifyAdmin = async (req, res, next) => {
       const tokenEmail = req.email;
-      // console.log(tokenEmail);
       const query = { email: tokenEmail }
       const result = await userCollection.findOne(query)
       const isAdmin = result?.role === 'admin'
@@ -138,7 +137,6 @@ async function run() {
     app.post('/signIn', async (req, res) => {
 
       const { email, password } = req.body;
-      // console.log();
       try {
         const user = await userCollection.findOne({ email: email });
 
@@ -153,10 +151,8 @@ async function run() {
         }
         res.send({ message: 'Login successful', user });
 
-        console.log(email);
 
       } catch (error) {
-        console.error('Error fetching user:', error);
         res.sendStatus(500); // Internal server error
       }
     });
@@ -201,7 +197,6 @@ async function run() {
     app.post('/addCashInData/:mobile', verifyToken, async (req, res) => {
     const cashInData = req.body;
     const mobile = req.params.mobile;
-    console.log(mobile);
 
     const query = { mobile: mobile, role: 'agent' };
 
@@ -412,7 +407,6 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
 
   app.post('/user/sendMoney', verifyToken, async (req, res) => {
     const userSendMoney = req.body;
-    console.log(userSendMoney);
     try {
         
  
@@ -488,7 +482,6 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
     app.patch('/user/admin/role/:id', verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const { role } = req.body;
-      console.log(id, role);
 
       const query = { _id: new ObjectId(id) };
       const user = await userCollection.findOne(query);
@@ -496,7 +489,7 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
       if (!user) {
         return res.status(404).send({ message: 'User not found' });
       }
-      console.log(user);
+    
       let updateDoc = {
         $set: { role: role }
       };
@@ -526,6 +519,10 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
 //  admin  All  Transaction
 
 app.get('/admin/AllTransaction', verifyToken,verifyAdmin , async(req,res)=>{
+  const result= await historyCollection.find().toArray()
+ return  res.send(result)
+})
+app.get('/users', async(req,res)=>{
   const result= await historyCollection.find().toArray()
  return  res.send(result)
 })
