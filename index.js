@@ -234,12 +234,12 @@ app.get('/addCashInData/:mobile', verifyToken, verifyAgent, async (req, res) => 
 
 app.patch('/agent/cashIn', verifyToken, verifyAgent, async (req, res) => {
   try {
-      const cashInDatas = req.body;
-      const dataId = cashInDatas.cashInDataId;
-      const agentPassword = cashInDatas.agentPassword;
-      const agentMobile = cashInDatas.agentNumber;
-      const userMobile = cashInDatas.userNumber;
-      const amount = parseFloat(cashInDatas.amount);
+      const userSendMoney = req.body;
+      const dataId = userSendMoney.cashInDataId;
+      const agentPassword = userSendMoney.agentPassword;
+      const agentMobile = userSendMoney.agentNumber;
+      const userMobile = userSendMoney.userNumber;
+      const amount = parseFloat(userSendMoney.amount);
 
       const agent = await userCollection.findOne({ mobile: agentMobile });
 
@@ -288,7 +288,7 @@ app.patch('/agent/cashIn', verifyToken, verifyAgent, async (req, res) => {
           );
 
           if (updateStatus.modifiedCount > 0) {
-              const historyResult = await historyCollection.insertOne(cashInDatas);
+              const historyResult = await historyCollection.insertOne(userSendMoney);
 
               return res.send({ status: 'success', message: 'Balance updated successfully', newUserBalance, newAgentBalance });
           } else {
@@ -342,12 +342,12 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
   app.post('/user/cashOut', verifyToken, async (req, res) => {
     try {
         
-        const cashInDatas = req.body;
-        const dataId = cashInDatas.cashInDataId;
-        const password = cashInDatas.password;
-        const agentMobile = cashInDatas.agentNumber;
-        const userMobile = cashInDatas.userNumber;
-        const amount = parseFloat(cashInDatas.amount);
+        const userSendMoney = req.body;
+        const dataId = userSendMoney.cashInDataId;
+        const password = userSendMoney.password;
+        const agentMobile = userSendMoney.agentNumber;
+        const userMobile = userSendMoney.userNumber;
+        const amount = parseFloat(userSendMoney.amount);
   
         const agent = await userCollection.findOne({ mobile: agentMobile });
   
@@ -390,7 +390,7 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
   
         if (updateUserResult.modifiedCount > 0 && updateAgentResult.modifiedCount > 0) {
             
-                const historyResult = await historyCollection.insertOne(cashInDatas);
+                const historyResult = await historyCollection.insertOne({...userSendMoney,agentName:agent.name});
   
                 return res.send({ status: 'success', message: 'CashOut  successfully Completed', newUserBalance, newAgentBalance });
             
@@ -406,6 +406,79 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
 
 
   // user Cash Out   end 
+
+
+  // user send money start
+
+  app.post('/user/sendMoney', verifyToken, async (req, res) => {
+    const userSendMoney = req.body;
+    console.log(userSendMoney);
+    try {
+        
+ 
+        const password = userSendMoney?.password;
+        const receiverMobile = userSendMoney?.receiverNumber;
+        const userMobile = userSendMoney?.userNumber;
+        const amount = parseFloat(userSendMoney?.amount);
+  
+        const receiver = await userCollection.findOne({ mobile:receiverMobile });
+  
+        if (!receiver) {
+            return res.send({ status: 'error', message: 'Invalid Number' });
+        }
+  
+      
+  
+        const user = await userCollection.findOne({ mobile: userMobile });
+        if (!user) {
+            return res.send({ status: 'error', message: 'Invalid User' });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+  
+        if (!isMatch) {
+            return res.send({ status: 'error', message: 'Invalid Pin' });
+        }
+        const receiverBalance = parseFloat(receiver.balance);
+        const userBalance = parseFloat(user.balance);
+
+        
+        if (userBalance < amount) {
+            return res.send({ status: 'error', message: ' You don`t have enough balance' });
+        }
+  
+        const newReceiverBalance = receiverBalance + amount;
+        const newUserBalance = userBalance - amount;
+  
+       
+        const updateUserResult = await userCollection.updateOne(
+            { mobile: userMobile },
+            { $set: { balance: newUserBalance } }
+        );
+  
+        const updateReceiverResult = await userCollection.updateOne(
+            { mobile: receiverMobile },
+            { $set: { balance: newReceiverBalance } }
+        );
+  
+
+
+        if (updateUserResult.modifiedCount > 0 && updateReceiverResult.modifiedCount > 0) {
+            
+                const historyResult = await historyCollection.insertOne({...userSendMoney,receiverName:receiver.name});
+  
+                return res.send({ status: 'success', message: 'Send Money  successfully Completed'});
+            
+        } else {
+            return res.send({ status: 'error', message: 'Failed to update balances' });
+        }
+    } catch (error) {
+        return res.send({ status: 'error', message: 'Internal Server Error' });
+    }
+  });
+  
+  
+
+  // user send money end 
 
 
 
