@@ -523,7 +523,12 @@ app.get('/user/transactionHistory/:mobile',  async (req, res) => {
 
     })
 
+//  admin  All  Transaction
 
+app.get('/admin/AllTransaction', verifyToken,verifyAdmin , async(req,res)=>{
+  const result= await historyCollection.find().toArray()
+ return  res.send(result)
+})
 
 
 
